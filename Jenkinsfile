@@ -8,89 +8,61 @@ pipeline {
         BRANCH_NAME = 'main'
     }
     
-    // Configure different platforms
-    matrix {
-        axes {
-            axis {
-                name 'PLATFORM'
-                values 'linux', 'windows', 'macos'
+    // Define stages
+    stages {
+        // Checkout code from version control
+        stage('Checkout') {
+            steps {
+                checkout scm
             }
         }
         
-        stages {
-            // Checkout code from version control
-            stage('Checkout') {
-                steps {
-                    checkout scm
-                }
-            }
-            
-            // Install dependencies based on platform
-            stage('Setup Environment') {
-                steps {
-                    script {
-                        switch(PLATFORM) {
-                            case 'linux':
-                                sh 'python3 -m pip install -r requirements.txt'
-                                break
-                            case 'windows':
-                                bat 'python -m pip install -r requirements.txt'
-                                break
-                            case 'macos':
-                                sh 'python3 -m pip install -r requirements.txt'
-                                break
+        // Setup environment and run code for different platforms in parallel
+        stage('Run on Different Platforms') {
+            parallel {
+                // Linux platform
+                linux: {
+                    steps {
+                        script {
+                            sh 'python3 -m pip install -r requirements.txt'
+                            sh 'python3 -m pytest tests/'
+                            sh 'python3 main.py'
                         }
                     }
                 }
-            }
-            
-            // Run tests
-            stage('Run Tests') {
-                steps {
-                    script {
-                        switch(PLATFORM) {
-                            case 'linux':
-                                sh 'python3 -m pytest tests/'
-                                break
-                            case 'windows':
-                                bat 'python -m pytest tests/'
-                                break
-                            case 'macos':
-                                sh 'python3 -m pytest tests/'
-                                break
+                
+                // Windows platform
+                windows: {
+                    steps {
+                        script {
+                            bat 'python -m pip install -r requirements.txt'
+                            bat 'python -m pytest tests/'
+                            bat 'python main.py'
                         }
                     }
                 }
-            }
-            
-            // Execute the code
-            stage('Run Code') {
-                steps {
-                    script {
-                        switch(PLATFORM) {
-                            case 'linux':
-                                sh 'python3 main.py'
-                                break
-                            case 'windows':
-                                bat 'python main.py'
-                                break
-                            case 'macos':
-                                sh 'python3 main.py'
-                                break
+
+                // macOS platform
+                macos: {
+                    steps {
+                        script {
+                            sh 'python3 -m pip install -r requirements.txt'
+                            sh 'python3 -m pytest tests/'
+                            sh 'python3 main.py'
                         }
                     }
                 }
             }
         }
     }
-    
+
     // Post-build actions
     post {
         success {
-            echo "Pipeline completed successfully on ${PLATFORM}"
+            echo "Pipeline completed successfully."
         }
         failure {
-            echo "Pipeline failed on ${PLATFORM}"
+            echo "Pipeline failed."
             // Add notification steps here (email, Slack, etc.)
         }
         always {
