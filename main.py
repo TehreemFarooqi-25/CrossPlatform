@@ -8,7 +8,7 @@ def main():
     
     # Example operations
     result1 = calculator.add(10, 20)
-    log_result("Addition", result1)
+    log_result("Additionn", result1)
     
     result2 = calculator.multiply(5, 6)
     log_result("Multiplication", result2)
