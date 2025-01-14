@@ -1,46 +1,148 @@
 pipeline {
-    agent any
+    agent none
     
     environment {
-        GITHUB_REPO = 'https://github.com/TehreemFarooqi-25/CrossPlatform.git'
-        BRANCH_NAME = 'main'
+        GITHUB_CREDENTIALS = credentials('github-credentials')
+        ARTIFACT_DIR = 'build-artifacts'
+    }
+    
+    options {
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
     
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-        
-        stage('Run on Different Platforms') {
+        stage('Parallel Platform Builds') {
             parallel {
-                stage('Linux') {
-                    steps {
-                        script {
-                            sh 'python3 -m pip install -r requirements.txt'
-                            sh 'python3 -m pytest tests/'
-                            sh 'python3 main.py'
+                stage('Linux Build') {
+                    agent {
+                        label 'linux'
+                    }
+                    stages {
+                        stage('Checkout') {
+                            steps {
+                                checkout scm
+                            }
+                        }
+                        stage('Setup') {
+                            steps {
+                                sh '''
+                                    python3 -m venv venv
+                                    . venv/bin/activate
+                                    pip install -r requirements.txt
+                                '''
+                            }
+                        }
+                        stage('Test') {
+                            steps {
+                                sh '''
+                                    . venv/bin/activate
+                                    pytest tests/ --junitxml=test-results/linux-results.xml
+                                '''
+                            }
+                        }
+                        stage('Build') {
+                            steps {
+                                sh '''
+                                    . venv/bin/activate
+                                    python setup.py bdist_wheel
+                                '''
+                            }
+                        }
+                        stage('Archive') {
+                            steps {
+                                archiveArtifacts artifacts: 'dist/*.whl', fingerprint: true
+                                junit 'test-results/*.xml'
+                            }
                         }
                     }
                 }
                 
-                stage('Windows') {
-                    steps {
-                        script {
-                            bat 'python -m pip install -r requirements.txt'
-                            bat 'python -m pytest tests/'
-                            bat 'python main.py'
+                stage('Windows Build') {
+                    agent {
+                        label 'windows'
+                    }
+                    stages {
+                        stage('Checkout') {
+                            steps {
+                                checkout scm
+                            }
+                        }
+                        stage('Setup') {
+                            steps {
+                                bat '''
+                                    python -m venv venv
+                                    call venv\\Scripts\\activate.bat
+                                    pip install -r requirements.txt
+                                '''
+                            }
+                        }
+                        stage('Test') {
+                            steps {
+                                bat '''
+                                    call venv\\Scripts\\activate.bat
+                                    pytest tests/ --junitxml=test-results/windows-results.xml
+                                '''
+                            }
+                        }
+                        stage('Build') {
+                            steps {
+                                bat '''
+                                    call venv\\Scripts\\activate.bat
+                                    python setup.py bdist_wheel
+                                '''
+                            }
+                        }
+                        stage('Archive') {
+                            steps {
+                                archiveArtifacts artifacts: 'dist/*.whl', fingerprint: true
+                                junit 'test-results/*.xml'
+                            }
                         }
                     }
                 }
                 
-                stage('MacOS') {
-                    steps {
-                        script {
-                            sh 'python3 -m pip install -r requirements.txt'
-                            sh 'python3 -m pytest tests/'
-                            sh 'python3 main.py'
+                stage('MacOS Build') {
+                    agent {
+                        label 'macos'
+                    }
+                    stages {
+                        stage('Checkout') {
+                            steps {
+                                checkout scm
+                            }
+                        }
+                        stage('Setup') {
+                            steps {
+                                sh '''
+                                    python3 -m venv venv
+                                    . venv/bin/activate
+                                    pip install -r requirements.txt
+                                '''
+                            }
+                        }
+                        stage('Test') {
+                            steps {
+                                sh '''
+                                    . venv/bin/activate
+                                    pytest tests/ --junitxml=test-results/macos-results.xml
+                                '''
+                            }
+                        }
+                        stage('Build') {
+                            steps {
+                                sh '''
+                                    . venv/bin/activate
+                                    python setup.py bdist_wheel
+                                '''
+                            }
+                        }
+                        stage('Archive') {
+                            steps {
+                                archiveArtifacts artifacts: 'dist/*.whl', fingerprint: true
+                                junit 'test-results/*.xml'
+                            }
                         }
                     }
                 }
@@ -49,14 +151,14 @@ pipeline {
     }
     
     post {
-        success {
-            echo "Pipeline completed successfully."
-        }
-        failure {
-            echo "Pipeline failed."
-        }
         always {
-            cleanWs()
+            node('master') {
+                emailext subject: "Build ${currentBuild.currentResult}: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+                         body: """Build status: ${currentBuild.currentResult}
+                                 Build URL: ${env.BUILD_URL}
+                                 Build Number: ${env.BUILD_NUMBER}""",
+                         recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+            }
         }
     }
 }
