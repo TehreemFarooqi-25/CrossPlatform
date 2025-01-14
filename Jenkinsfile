@@ -9,7 +9,9 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                // Explicit git checkout instead of checkout scm
+                git branch: env.BRANCH_NAME,
+                    url: env.GITHUB_REPO
             }
         }
         
